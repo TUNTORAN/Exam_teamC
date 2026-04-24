@@ -1,161 +1,288 @@
-//追加コード「TestDao.java」
-
 package dao;
 
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
 
+import bean.School;
 import bean.Test;
 
 public class TestDao extends Dao {
 
     /**
-     * 試験一覧取得
+     * 保存（INSERT or UPDATE）
      */
-    public List<Test> getList(String schoolCd) throws Exception {
+    public boolean save(Test test) throws Exception {
+
+        // 既存データ確認
+        Test old = get(
+            test.getStudentNo(),
+            test.getSubjectCd(),
+            test.getSchoolCd(),
+            test.getNo()
+        );
+
+        int count = 0;
+
+        if (old == null) {
+            // 新規登録
+            count = insert(test);
+        } else {
+            // 更新
+            count = update(test);
+        }
+
+        return count > 0;
+    }
+
+    /**
+     * 条件検索
+     */
+    public List<Test> filter(School school, int entYear, String classNum, String subjectId) throws Exception {
 
         List<Test> list = new ArrayList<>();
 
-        Connection con = getConnection();
+        Connection connection = getConnection();
+        PreparedStatement statement = null;
+        ResultSet rSet = null;
 
-        String sql = "SELECT * FROM TEST WHERE SCHOOL_CD = ?";
+        try {
 
-        PreparedStatement st = con.prepareStatement(sql);
-        st.setString(1, schoolCd);
+            String sql =
+                "select t.* from test t " +
+                "inner join student s on t.student_no = s.no " +
+                "where t.school_cd = ? ";
 
-        ResultSet rs = st.executeQuery();
+            // 条件追加（設計書準拠：空条件対応）
+            if (entYear != 0) {
+                sql += "and s.ent_year = ? ";
+            }
+            if (classNum != null && !classNum.isEmpty()) {
+                sql += "and s.class_num = ? ";
+            }
+            if (subjectId != null && !subjectId.isEmpty()) {
+                sql += "and t.subject_cd = ? ";
+            }
 
-        while (rs.next()) {
-            Test test = new Test();
+            statement = connection.prepareStatement(sql);
 
-            test.setStudentNo(rs.getString("STUDENT_NO"));
-            test.setSubjectCd(rs.getString("SUBJECT_CD"));
-            test.setSchoolCd(rs.getString("SCHOOL_CD"));
-            test.setNo(rs.getInt("NO"));
-            test.setPoint(rs.getInt("POINT"));
-            test.setClassNum(rs.getString("CLASS_NUM"));
+            int idx = 1;
+            statement.setString(idx++, school.getCd());
 
-            list.add(test);
+            if (entYear != 0) {
+                statement.setInt(idx++, entYear);
+            }
+            if (classNum != null && !classNum.isEmpty()) {
+                statement.setString(idx++, classNum);
+            }
+            if (subjectId != null && !subjectId.isEmpty()) {
+                statement.setString(idx++, subjectId);
+            }
+
+            rSet = statement.executeQuery();
+
+            while (rSet.next()) {
+                Test test = new Test();
+
+                test.setStudentNo(rSet.getString("student_no"));
+                test.setSubjectCd(rSet.getString("subject_cd"));
+                test.setSchoolCd(rSet.getString("school_cd"));
+                test.setNo(rSet.getInt("no"));
+                test.setPoint(rSet.getInt("point"));
+                test.setClassNum(rSet.getString("class_num"));
+
+                list.add(test);
+            }
+
+        } catch (Exception e) {
+            throw e;
+
+        } finally {
+
+            if (rSet != null) {
+                try {
+                    rSet.close();
+                } catch (SQLException e) {
+                    throw e;
+                }
+            }
+
+            if (statement != null) {
+                try {
+                    statement.close();
+                } catch (SQLException e) {
+                    throw e;
+                }
+            }
+
+            if (connection != null) {
+                try {
+                    connection.close();
+                } catch (SQLException e) {
+                    throw e;
+                }
+            }
         }
-
-        st.close();
-        con.close();
 
         return list;
     }
 
     /**
-     * 1件取得（主キー検索）
+     * 以下はあなたの既存コード（変更なし）
      */
+
+    public List<Test> getList(String schoolCd) throws Exception {
+
+        List<Test> list = new ArrayList<>();
+
+        Connection connection = getConnection();
+        PreparedStatement statement = null;
+        ResultSet rSet = null;
+
+        try {
+            statement = connection.prepareStatement(
+                "select * from test where school_cd = ?"
+            );
+
+            statement.setString(1, schoolCd);
+
+            rSet = statement.executeQuery();
+
+            while (rSet.next()) {
+                Test test = new Test();
+
+                test.setStudentNo(rSet.getString("student_no"));
+                test.setSubjectCd(rSet.getString("subject_cd"));
+                test.setSchoolCd(rSet.getString("school_cd"));
+                test.setNo(rSet.getInt("no"));
+                test.setPoint(rSet.getInt("point"));
+                test.setClassNum(rSet.getString("class_num"));
+
+                list.add(test);
+            }
+
+        } finally {
+            if (rSet != null) rSet.close();
+            if (statement != null) statement.close();
+            if (connection != null) connection.close();
+        }
+
+        return list;
+    }
+
     public Test get(String studentNo, String subjectCd, String schoolCd, int no) throws Exception {
-
-        Connection con = getConnection();
-
-        String sql = "SELECT * FROM TEST WHERE STUDENT_NO = ? AND SUBJECT_CD = ? AND SCHOOL_CD = ? AND NO = ?";
-
-        PreparedStatement st = con.prepareStatement(sql);
-        st.setString(1, studentNo);
-        st.setString(2, subjectCd);
-        st.setString(3, schoolCd);
-        st.setInt(4, no);
-
-        ResultSet rs = st.executeQuery();
 
         Test test = null;
 
-        if (rs.next()) {
-            test = new Test();
+        Connection connection = getConnection();
+        PreparedStatement statement = null;
+        ResultSet rSet = null;
 
-            test.setStudentNo(rs.getString("STUDENT_NO"));
-            test.setSubjectCd(rs.getString("SUBJECT_CD"));
-            test.setSchoolCd(rs.getString("SCHOOL_CD"));
-            test.setNo(rs.getInt("NO"));
-            test.setPoint(rs.getInt("POINT"));
-            test.setClassNum(rs.getString("CLASS_NUM"));
+        try {
+            statement = connection.prepareStatement(
+                "select * from test where student_no = ? and subject_cd = ? and school_cd = ? and no = ?"
+            );
+
+            statement.setString(1, studentNo);
+            statement.setString(2, subjectCd);
+            statement.setString(3, schoolCd);
+            statement.setInt(4, no);
+
+            rSet = statement.executeQuery();
+
+            if (rSet.next()) {
+                test = new Test();
+
+                test.setStudentNo(rSet.getString("student_no"));
+                test.setSubjectCd(rSet.getString("subject_cd"));
+                test.setSchoolCd(rSet.getString("school_cd"));
+                test.setNo(rSet.getInt("no"));
+                test.setPoint(rSet.getInt("point"));
+                test.setClassNum(rSet.getString("class_num"));
+            }
+
+        } finally {
+            if (rSet != null) rSet.close();
+            if (statement != null) statement.close();
+            if (connection != null) connection.close();
         }
-
-        st.close();
-        con.close();
 
         return test;
     }
 
-    /**
-     * 登録（INSERT）
-     */
     public int insert(Test test) throws Exception {
 
-        Connection con = getConnection();
+        Connection connection = getConnection();
+        PreparedStatement statement = null;
 
-        String sql = "INSERT INTO TEST (STUDENT_NO, SUBJECT_CD, SCHOOL_CD, NO, POINT, CLASS_NUM) VALUES (?, ?, ?, ?, ?, ?)";
+        try {
+            statement = connection.prepareStatement(
+                "insert into test values (?, ?, ?, ?, ?, ?)"
+            );
 
-        PreparedStatement st = con.prepareStatement(sql);
+            statement.setString(1, test.getStudentNo());
+            statement.setString(2, test.getSubjectCd());
+            statement.setString(3, test.getSchoolCd());
+            statement.setInt(4, test.getNo());
+            statement.setInt(5, test.getPoint());
+            statement.setString(6, test.getClassNum());
 
-        st.setString(1, test.getStudentNo());
-        st.setString(2, test.getSubjectCd());
-        st.setString(3, test.getSchoolCd());
-        st.setInt(4, test.getNo());
-        st.setInt(5, test.getPoint());
-        st.setString(6, test.getClassNum());
+            return statement.executeUpdate();
 
-        int line = st.executeUpdate();
-
-        st.close();
-        con.close();
-
-        return line;
+        } finally {
+            if (statement != null) statement.close();
+            if (connection != null) connection.close();
+        }
     }
 
-    /**
-     * 更新（UPDATE）
-     */
     public int update(Test test) throws Exception {
 
-        Connection con = getConnection();
+        Connection connection = getConnection();
+        PreparedStatement statement = null;
 
-        String sql = "UPDATE TEST SET POINT = ?, CLASS_NUM = ? WHERE STUDENT_NO = ? AND SUBJECT_CD = ? AND SCHOOL_CD = ? AND NO = ?";
+        try {
+            statement = connection.prepareStatement(
+                "update test set point=?, class_num=? where student_no=? and subject_cd=? and school_cd=? and no=?"
+            );
 
-        PreparedStatement st = con.prepareStatement(sql);
+            statement.setInt(1, test.getPoint());
+            statement.setString(2, test.getClassNum());
+            statement.setString(3, test.getStudentNo());
+            statement.setString(4, test.getSubjectCd());
+            statement.setString(5, test.getSchoolCd());
+            statement.setInt(6, test.getNo());
 
-        st.setInt(1, test.getPoint());
-        st.setString(2, test.getClassNum());
-        st.setString(3, test.getStudentNo());
-        st.setString(4, test.getSubjectCd());
-        st.setString(5, test.getSchoolCd());
-        st.setInt(6, test.getNo());
+            return statement.executeUpdate();
 
-        int line = st.executeUpdate();
-
-        st.close();
-        con.close();
-
-        return line;
+        } finally {
+            if (statement != null) statement.close();
+            if (connection != null) connection.close();
+        }
     }
 
-    /**
-     * 削除（DELETE）
-     */
     public int delete(String studentNo, String subjectCd, String schoolCd, int no) throws Exception {
 
-        Connection con = getConnection();
+        Connection connection = getConnection();
+        PreparedStatement statement = null;
 
-        String sql = "DELETE FROM TEST WHERE STUDENT_NO = ? AND SUBJECT_CD = ? AND SCHOOL_CD = ? AND NO = ?";
+        try {
+            statement = connection.prepareStatement(
+                "delete from test where student_no=? and subject_cd=? and school_cd=? and no=?"
+            );
 
-        PreparedStatement st = con.prepareStatement(sql);
+            statement.setString(1, studentNo);
+            statement.setString(2, subjectCd);
+            statement.setString(3, schoolCd);
+            statement.setInt(4, no);
 
-        st.setString(1, studentNo);
-        st.setString(2, subjectCd);
-        st.setString(3, schoolCd);
-        st.setInt(4, no);
+            return statement.executeUpdate();
 
-        int line = st.executeUpdate();
-
-        st.close();
-        con.close();
-
-        return line;
+        } finally {
+            if (statement != null) statement.close();
+            if (connection != null) connection.close();
+        }
     }
 }
